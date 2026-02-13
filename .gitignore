@@ -1,0 +1,7 @@
+.env
+.idea/
+.claude/settings.local.json
+*.exe
+*.test
+*.out
+/api
