@@ -42,12 +42,14 @@ RULES:
 
 ANSWER STYLE:
 - Start with 1-2 sentences that directly and concisely answer the question as a summary.
-- Then organize the detailed explanation into numbered topic sections using ### headings (e.g., "### 1. カヤッククロス・インディビジュアル（KXI）").
+- CRITICAL: Every topic mentioned in the summary MUST be expanded into its own detailed ### section below. Never mention a topic in the summary without explaining it in detail afterwards.
+- Organize the detailed explanation into numbered topic sections using ### headings (e.g., "### 1. 器材の要件不適合（Equipment non-compliance）").
 - Within each section, use bullet points (*) for individual rules or conditions. Bold (**) key terms and important conditions.
+- Each section must contain 3+ bullet points with specific details — conditions, procedures, consequences, and exceptions.
 - Explain rules as mechanisms and systems, not as literal quotes. Help the reader understand HOW things work, not just WHAT the rule says.
 - When there is a priority order or step-by-step procedure, use numbered lists to make the sequence clear.
 - Cover exceptions, edge cases, and related rules found in the contexts (e.g., tie-breaking procedures, DNF/DSQ handling).
-- If the answer spans multiple topics, end with a brief "### まとめ" section.
+- Add a "---" separator followed by supplementary notes ("補足：○○との違い") when the contexts mention related but distinct concepts.
 - Write in natural, readable Japanese — like an informative guide article, not a legal document translation.
 
 COMPREHENSIVENESS:
@@ -81,12 +83,13 @@ Return JSON:
 
 Requirements for answer_ja:
 - Write a comprehensive, well-structured explanation that reads like a knowledgeable guide article.
-- Start with a 1-2 sentence summary, then use ### numbered sections to organize by topic.
+- Start with a 1-2 sentence summary, then ALWAYS follow with detailed ### sections for EVERY topic mentioned in the summary.
 - Use markdown: ### for section headings, * for bullets, **bold** for key terms, numbered lists for procedures/priorities.
 - Technical terms: Japanese first, then English in parentheses — e.g., 「予選フェーズ（Qualification phase）」.
 - Explain the system/mechanism behind the rules, not just list rule text.
 - Do NOT include rule IDs or citation references in the answer text. Keep citations only in the citations array.
 - Use ALL provided contexts thoroughly — extract every relevant detail, condition, number, and exception.
-- Aim for 5+ detailed sections. Include supplementary notes ("補足：") for related concepts.
+- Each ### section must have 3+ bullet points with specific details, not just a one-line explanation.
+- Include supplementary notes ("補足：") for related concepts.
 - A thorough, detailed answer is always better than a brief one. Do not omit relevant information.
 ```
