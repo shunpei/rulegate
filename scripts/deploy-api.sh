@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Deploy the rulegate API to Cloud Run.
-# Usage: ./scripts/deploy.sh
+# Usage: ./scripts/deploy-api.sh
 #
 # Required environment variables:
 #   GCP_PROJECT_ID   - GCP project ID
@@ -13,7 +13,7 @@ set -euo pipefail
 : "${RAG_CORPUS_ID:?RAG_CORPUS_ID is required}"
 
 REGION="${GCP_REGION:-us-central1}"
-SERVICE_NAME="rulegate"
+SERVICE_NAME="rulegate-api"
 IMAGE="gcr.io/${GCP_PROJECT_ID}/${SERVICE_NAME}"
 
 echo "==> Building container image..."

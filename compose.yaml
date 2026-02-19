@@ -1,0 +1,33 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro
+    env_file:
+      - .env
+    environment:
+      - PROMPTS_PATH=docs/prompts.md
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - API_URL=http://api:8080
+    depends_on:
+      - api
+
+volumes:
+  go-mod-cache:
