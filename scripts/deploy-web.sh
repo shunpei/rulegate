@@ -13,12 +13,13 @@ set -euo pipefail
 
 REGION="${GCP_REGION:-us-central1}"
 SERVICE_NAME="rulegate-web"
-IMAGE="gcr.io/${GCP_PROJECT_ID}/${SERVICE_NAME}"
+IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run/${SERVICE_NAME}"
 
 echo "==> Building container image..."
 gcloud builds submit \
   --tag "${IMAGE}" \
   --project "${GCP_PROJECT_ID}" \
+  --region "${REGION}" \
   ./frontend
 
 echo "==> Deploying to Cloud Run..."
