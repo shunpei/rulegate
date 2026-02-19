@@ -10,6 +10,7 @@ env:
   GCP_PROJECT_ID: rulegate
   GCP_REGION: europe-west4
   SERVICE_NAME: rulegate-web
+  IMAGE: europe-west4-docker.pkg.dev/rulegate/cloud-run/rulegate-web
 
 jobs:
   deploy:
@@ -31,15 +32,31 @@ jobs:
 
       - name: Build and push
         run: |
-          gcloud builds submit \
-            --tag "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}" \
+          BUILD_ID=$(gcloud builds submit \
+            --tag "${{ env.IMAGE }}" \
             --project "${{ env.GCP_PROJECT_ID }}" \
-            ./frontend
+            --async --format='value(id)' \
+            ./frontend)
+          echo "Build started: ${BUILD_ID}"
+
+          while true; do
+            STATUS=$(gcloud builds describe "${BUILD_ID}" \
+              --project "${{ env.GCP_PROJECT_ID }}" \
+              --format='value(status)')
+            echo "Build status: ${STATUS}"
+            case "${STATUS}" in
+              SUCCESS) break ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "Build failed with status: ${STATUS}"
+                exit 1 ;;
+            esac
+            sleep 10
+          done
 
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy "${{ env.SERVICE_NAME }}" \
-            --image "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}" \
+            --image "${{ env.IMAGE }}" \
             --region "${{ env.GCP_REGION }}" \
             --project "${{ env.GCP_PROJECT_ID }}" \
             --platform managed \
