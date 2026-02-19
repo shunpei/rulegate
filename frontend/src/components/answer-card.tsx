@@ -1,5 +1,6 @@
 "use client";
 
+import ReactMarkdown from "react-markdown";
 import {
   Card,
   CardContent,
@@ -25,9 +26,9 @@ export function AnswerCard({ question, response }: AnswerCardProps) {
         <CardTitle className="text-base font-medium">{question}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="whitespace-pre-wrap leading-relaxed">
-          {response.answer_ja}
-        </p>
+        <div className="prose prose-sm max-w-none prose-headings:text-base prose-headings:font-semibold prose-headings:mt-4 prose-headings:mb-2 prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5">
+          <ReactMarkdown>{response.answer_ja}</ReactMarkdown>
+        </div>
         {!isNotFound && <CitationList citations={response.citations} />}
       </CardContent>
       <CardFooter className="flex items-center gap-2 text-xs text-muted-foreground">
