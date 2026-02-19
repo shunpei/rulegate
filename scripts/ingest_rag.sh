@@ -30,13 +30,13 @@ CORPUS_RESPONSE=$(curl -s -X POST \
   -H "Content-Type: application/json" \
   -d "{
     \"display_name\": \"${DISPLAY_NAME}\",
-    \"rag_embedding_model_config\": {
-      \"vertex_prediction_endpoint\": {
-        \"endpoint\": \"projects/${GCP_PROJECT_ID}/locations/${REGION}/publishers/google/models/text-embedding-005\"
+    \"vector_db_config\": {
+      \"rag_managed_db\": {},
+      \"rag_embedding_model_config\": {
+        \"vertex_prediction_endpoint\": {
+          \"endpoint\": \"projects/${GCP_PROJECT_ID}/locations/${REGION}/publishers/google/models/text-embedding-005\"
+        }
       }
-    },
-    \"rag_vector_db_config\": {
-      \"rag_managed_db\": {}
     }
   }")
 
@@ -93,9 +93,13 @@ IMPORT_RESPONSE=$(curl -s -X POST \
       \"gcs_source\": {
         \"uris\": [\"${GCS_PDF_URI}\"]
       },
-      \"rag_file_chunking_config\": {
-        \"chunk_size\": ${CHUNK_SIZE},
-        \"chunk_overlap\": ${CHUNK_OVERLAP}
+      \"rag_file_transformation_config\": {
+        \"rag_file_chunking_config\": {
+          \"fixed_length_chunking\": {
+            \"chunk_size\": ${CHUNK_SIZE},
+            \"chunk_overlap\": ${CHUNK_OVERLAP}
+          }
+        }
       }
     }
   }")
