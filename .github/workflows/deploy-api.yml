@@ -10,6 +10,8 @@ on:
       - "go.sum"
       - "Dockerfile"
       - "docs/prompts.md"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
 
 env:
   GCP_PROJECT_ID: rulegate
