@@ -19,7 +19,6 @@ echo "==> Building container image..."
 gcloud builds submit \
   --tag "${IMAGE}" \
   --project "${GCP_PROJECT_ID}" \
-  --region "${REGION}" \
   ./frontend
 
 echo "==> Deploying to Cloud Run..."

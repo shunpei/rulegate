@@ -38,8 +38,7 @@ jobs:
         run: |
           gcloud builds submit \
             --tag "${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/cloud-run/${{ env.SERVICE_NAME }}" \
-            --project "${{ env.GCP_PROJECT_ID }}" \
-            --region "${{ env.GCP_REGION }}"
+            --project "${{ env.GCP_PROJECT_ID }}"
 
       - name: Deploy to Cloud Run
         run: |

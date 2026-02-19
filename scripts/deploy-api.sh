@@ -17,7 +17,7 @@ SERVICE_NAME="rulegate-api"
 IMAGE="${REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/cloud-run/${SERVICE_NAME}"
 
 echo "==> Building container image..."
-gcloud builds submit --tag "${IMAGE}" --project "${GCP_PROJECT_ID}" --region "${REGION}"
+gcloud builds submit --tag "${IMAGE}" --project "${GCP_PROJECT_ID}"
 
 echo "==> Deploying to Cloud Run..."
 gcloud run deploy "${SERVICE_NAME}" \
