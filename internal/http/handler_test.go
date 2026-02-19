@@ -1,13 +1,14 @@
 package http
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/labstack/echo/v4"
 
 	"github.com/shunpei/rulegate/internal/domain"
 )
@@ -71,17 +72,23 @@ func defaultConfig() Config {
 	}
 }
 
+// newTestContext creates an Echo context for testing POST JSON endpoints.
+func newTestContext(e *echo.Echo, method, path, body string) (echo.Context, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	return c, rec
+}
+
 // --- Tests ---
 
 func TestAsk_MissingQuestionJA_Returns400(t *testing.T) {
+	e := echo.New()
 	h := NewHandler(&mockRetriever{}, defaultMockLLM(), defaultConfig())
 
-	body := `{"discipline":"canoe_slalom"}`
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	h.Ask(rec, req)
+	c, rec := newTestContext(e, http.MethodPost, "/api/ask", `{"discipline":"canoe_slalom"}`)
+	h.Ask(c)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", rec.Code)
@@ -95,12 +102,11 @@ func TestAsk_MissingQuestionJA_Returns400(t *testing.T) {
 }
 
 func TestAsk_InvalidJSON_Returns400(t *testing.T) {
+	e := echo.New()
 	h := NewHandler(&mockRetriever{}, defaultMockLLM(), defaultConfig())
 
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader("not json"))
-	rec := httptest.NewRecorder()
-
-	h.Ask(rec, req)
+	c, rec := newTestContext(e, http.MethodPost, "/api/ask", "not json")
+	h.Ask(c)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", rec.Code)
@@ -108,6 +114,7 @@ func TestAsk_InvalidJSON_Returns400(t *testing.T) {
 }
 
 func TestAsk_LowScore_ReturnsNotFound(t *testing.T) {
+	e := echo.New()
 	retriever := &mockRetriever{
 		contexts: []domain.RetrievedContext{
 			{Text: "some text", Score: 0.3},
@@ -116,11 +123,8 @@ func TestAsk_LowScore_ReturnsNotFound(t *testing.T) {
 	}
 	h := NewHandler(retriever, defaultMockLLM(), defaultConfig())
 
-	body := `{"question_ja":"存在しない質問"}`
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.Ask(rec, req)
+	c, rec := newTestContext(e, http.MethodPost, "/api/ask", `{"question_ja":"存在しない質問"}`)
+	h.Ask(c)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
@@ -141,6 +145,7 @@ func TestAsk_LowScore_ReturnsNotFound(t *testing.T) {
 }
 
 func TestAsk_HighScore_ReturnsAnswer(t *testing.T) {
+	e := echo.New()
 	retriever := &mockRetriever{
 		contexts: []domain.RetrievedContext{
 			{Text: "A 2-second penalty is applied for each gate touch.", Score: 0.88},
@@ -148,17 +153,13 @@ func TestAsk_HighScore_ReturnsAnswer(t *testing.T) {
 	}
 	h := NewHandler(retriever, defaultMockLLM(), defaultConfig())
 
-	body := `{"question_ja":"ゲートに触った場合のペナルティは？"}`
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.Ask(rec, req)
+	c, rec := newTestContext(e, http.MethodPost, "/api/ask", `{"question_ja":"ゲートに触った場合のペナルティは？"}`)
+	h.Ask(c)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
 	}
 
-	// Read raw bytes first, then decode from them.
 	raw := rec.Body.Bytes()
 
 	var resp domain.AskResponse
@@ -197,6 +198,7 @@ func TestAsk_HighScore_ReturnsAnswer(t *testing.T) {
 }
 
 func TestAsk_CitationQuoteEnforced25Words(t *testing.T) {
+	e := echo.New()
 	longQuote := "this is a very long quote that has way more than twenty five words in it and should be truncated by the enforcement function to meet the citation policy requirements set forth in the design document"
 	llmClient := &mockLLM{
 		rewriteResult: &domain.RewriteResult{
@@ -225,17 +227,14 @@ func TestAsk_CitationQuoteEnforced25Words(t *testing.T) {
 
 	h := NewHandler(retriever, llmClient, defaultConfig())
 
-	body := `{"question_ja":"テスト質問"}`
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.Ask(rec, req)
+	c, rec := newTestContext(e, http.MethodPost, "/api/ask", `{"question_ja":"テスト質問"}`)
+	h.Ask(c)
 
 	var resp domain.AskResponse
 	json.NewDecoder(rec.Body).Decode(&resp)
 
-	for _, c := range resp.Citations {
-		words := strings.Fields(c.QuoteEN)
+	for _, ci := range resp.Citations {
+		words := strings.Fields(ci.QuoteEN)
 		if len(words) > 26 { // 25 + "..." counted as part of last element
 			t.Errorf("quote_en exceeds 25 words: %d words", len(words))
 		}
@@ -243,6 +242,7 @@ func TestAsk_CitationQuoteEnforced25Words(t *testing.T) {
 }
 
 func TestAsk_DefaultsApplied(t *testing.T) {
+	e := echo.New()
 	retriever := &mockRetriever{
 		contexts: []domain.RetrievedContext{
 			{Text: "test", Score: 0.9},
@@ -251,11 +251,8 @@ func TestAsk_DefaultsApplied(t *testing.T) {
 	h := NewHandler(retriever, defaultMockLLM(), defaultConfig())
 
 	// No discipline or rule_edition specified — should use defaults.
-	body := `{"question_ja":"テスト"}`
-	req := httptest.NewRequest(http.MethodPost, "/ask", strings.NewReader(body))
-	rec := httptest.NewRecorder()
-
-	h.Ask(rec, req)
+	c, rec := newTestContext(e, http.MethodPost, "/api/ask", `{"question_ja":"テスト"}`)
+	h.Ask(c)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
@@ -263,12 +260,14 @@ func TestAsk_DefaultsApplied(t *testing.T) {
 }
 
 func TestHealthz(t *testing.T) {
+	e := echo.New()
 	h := NewHandler(&mockRetriever{}, defaultMockLLM(), defaultConfig())
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
 
-	h.Healthz(rec, req)
+	h.Healthz(c)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", rec.Code)
@@ -288,22 +287,24 @@ func TestRateLimiter(t *testing.T) {
 		contexts: []domain.RetrievedContext{{Text: "test", Score: 0.9}},
 	}, defaultMockLLM(), defaultConfig())
 
-	mux := NewServeMux(h, limiter, "*")
+	e := NewRouter(h, limiter, "*")
 
 	// First request should succeed.
 	body := `{"question_ja":"テスト"}`
-	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewReader([]byte(body)))
+	req := httptest.NewRequest(http.MethodPost, "/api/ask", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("first request: expected 200, got %d", rec.Code)
 	}
 
 	// Second immediate request should be rate limited.
-	req = httptest.NewRequest(http.MethodPost, "/ask", bytes.NewReader([]byte(body)))
+	req = httptest.NewRequest(http.MethodPost, "/api/ask", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	e.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusTooManyRequests {
 		t.Errorf("second request: expected 429, got %d", rec.Code)

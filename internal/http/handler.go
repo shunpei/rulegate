@@ -1,12 +1,13 @@
 package http
 
 import (
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/labstack/echo/v4"
 
 	"github.com/shunpei/rulegate/internal/domain"
 	"github.com/shunpei/rulegate/internal/llm"
@@ -16,13 +17,13 @@ import (
 
 // Config holds handler configuration from environment.
 type Config struct {
-	DefaultTopK      int
-	DefaultMinConf   float64
-	SourceURL        string
-	RAGCorpusID      string
+	DefaultTopK    int
+	DefaultMinConf float64
+	SourceURL      string
+	RAGCorpusID    string
 }
 
-// Handler implements the /ask and /healthz endpoints.
+// Handler implements the /api/ask and /healthz endpoints.
 type Handler struct {
 	retriever rag.Retriever
 	llm       llm.LLM
@@ -37,26 +38,24 @@ func NewHandler(retriever rag.Retriever, llmClient llm.LLM, cfg Config) *Handler
 	}
 }
 
-func (h *Handler) Healthz(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func (h *Handler) Healthz(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+func (h *Handler) Ask(c echo.Context) error {
+	ctx := c.Request().Context()
 	reqID := logging.RequestID(ctx)
 	totalStart := time.Now()
 
 	// Parse request body.
 	var req domain.AskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeAppError(w, domain.NewValidationError("invalid JSON body"))
-		return
+	if err := c.Bind(&req); err != nil {
+		return respondAppError(c, domain.NewValidationError("invalid JSON body"))
 	}
 
 	// Validate.
 	if err := req.Validate(); err != nil {
-		writeAppError(w, err)
-		return
+		return respondAppError(c, err)
 	}
 
 	topK := req.EffectiveTopK(h.cfg.DefaultTopK)
@@ -77,8 +76,7 @@ func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
 	rewriteLatency := time.Since(rewriteStart)
 	if err != nil {
 		slog.ErrorContext(ctx, "rewrite failed", append(logFields, "error", err)...)
-		writeAppError(w, domain.NewVertexError("query rewrite failed", err))
-		return
+		return respondAppError(c, domain.NewVertexError("query rewrite failed", err))
 	}
 
 	slog.InfoContext(ctx, "query rewritten",
@@ -91,15 +89,14 @@ func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
 	retrieveLatency := time.Since(retrieveStart)
 	if err != nil {
 		slog.ErrorContext(ctx, "retrieval failed", append(logFields, "error", err)...)
-		writeAppError(w, domain.NewVertexError("context retrieval failed", err))
-		return
+		return respondAppError(c, domain.NewVertexError("context retrieval failed", err))
 	}
 
 	// Step 3: Score gating.
 	maxScore := 0.0
-	for _, c := range contexts {
-		if c.Score > maxScore {
-			maxScore = c.Score
+	for _, ctx := range contexts {
+		if ctx.Score > maxScore {
+			maxScore = ctx.Score
 		}
 	}
 
@@ -118,8 +115,7 @@ func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
 			append(logFields, "max_score", maxScore, "threshold", minConf)...,
 		)
 		resp := domain.NotFoundResponse(corpus, topK)
-		writeJSON(w, http.StatusOK, resp)
-		return
+		return c.JSON(http.StatusOK, resp)
 	}
 
 	// Step 4: Answer generation.
@@ -128,8 +124,7 @@ func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
 	genLatency := time.Since(genStart)
 	if err != nil {
 		slog.ErrorContext(ctx, "generation failed", append(logFields, "error", err)...)
-		writeAppError(w, domain.NewVertexError("answer generation failed", err))
-		return
+		return respondAppError(c, domain.NewVertexError("answer generation failed", err))
 	}
 
 	totalLatency := time.Since(totalStart)
@@ -168,13 +163,7 @@ func (h *Handler) Ask(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	writeJSON(w, http.StatusOK, resp)
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // enforceWordLimit truncates text to maxWords and appends "..." if truncated.
@@ -186,16 +175,15 @@ func enforceWordLimit(text string, maxWords int) string {
 	return strings.Join(words[:maxWords], " ") + "..."
 }
 
-func writeAppError(w http.ResponseWriter, err error) {
+func respondAppError(c echo.Context, err error) error {
 	var appErr *domain.AppError
 	if errors.As(err, &appErr) {
-		writeJSON(w, appErr.StatusCode, domain.ErrorResponse{
+		return c.JSON(appErr.StatusCode, domain.ErrorResponse{
 			Error: appErr.Message,
 			Code:  string(appErr.Category),
 		})
-		return
 	}
-	writeJSON(w, http.StatusInternalServerError, domain.ErrorResponse{
+	return c.JSON(http.StatusInternalServerError, domain.ErrorResponse{
 		Error: "internal server error",
 		Code:  string(domain.ErrCatUnknown),
 	})

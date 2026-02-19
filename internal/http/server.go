@@ -1,23 +1,30 @@
 package http
 
 import (
-	"net/http"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
-// NewServeMux wires up all routes and middleware.
-func NewServeMux(h *Handler, rateLimiter *IPRateLimiter, allowOrigin string) http.Handler {
-	mux := http.NewServeMux()
+// NewRouter creates an Echo router with all routes and middleware.
+func NewRouter(h *Handler, rateLimiter *IPRateLimiter, allowOrigin string) *echo.Echo {
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
 
-	mux.HandleFunc("GET /healthz", h.Healthz)
-	mux.HandleFunc("POST /ask", h.Ask)
+	// Middleware stack.
+	e.Use(middleware.Recover())
+	e.Use(RequestIDMiddleware())
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{allowOrigin},
+		AllowMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowHeaders: []string{"Content-Type"},
+	}))
+	e.Use(LoggingMiddleware())
+	e.Use(rateLimiter.Middleware())
 
-	// Stack middleware: outermost first.
-	var handler http.Handler = mux
-	handler = rateLimiter.Middleware(handler)
-	handler = Logging(handler)
-	handler = CORS(allowOrigin)(handler)
-	handler = RequestID(handler)
-	handler = Recovery(handler)
+	// Routes.
+	e.GET("/healthz", h.Healthz)
+	e.POST("/api/ask", h.Ask)
 
-	return handler
+	return e
 }

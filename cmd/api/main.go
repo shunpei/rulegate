@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -74,7 +73,7 @@ func run() error {
 	}
 	defer llmClient.Close()
 
-	// Build handler and server.
+	// Build handler and router.
 	handler := apphttp.NewHandler(ragClient, llmClient, apphttp.Config{
 		DefaultTopK:    defaultTopK,
 		DefaultMinConf: defaultMinConf,
@@ -83,21 +82,13 @@ func run() error {
 	})
 
 	rateLimiter := apphttp.NewIPRateLimiter(rateLimitRPS, rateLimitBurst)
-	mux := apphttp.NewServeMux(handler, rateLimiter, allowOrigin)
-
-	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
-	}
+	e := apphttp.NewRouter(handler, rateLimiter, allowOrigin)
 
 	// Graceful shutdown.
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("server starting", "port", port)
-		errCh <- srv.ListenAndServe()
+		errCh <- e.Start(":" + port)
 	}()
 
 	quit := make(chan os.Signal, 1)
@@ -107,15 +98,13 @@ func run() error {
 	case sig := <-quit:
 		slog.Info("shutdown signal received", "signal", sig.String())
 	case err := <-errCh:
-		if err != http.ErrServerClosed {
-			return fmt.Errorf("server error: %w", err)
-		}
+		return fmt.Errorf("server error: %w", err)
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer shutdownCancel()
 
-	if err := srv.Shutdown(shutdownCtx); err != nil {
+	if err := e.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("server shutdown: %w", err)
 	}
 
