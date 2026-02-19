@@ -100,6 +100,7 @@ func (c *GeminiClient) GenerateAnswer(ctx context.Context, questionJA string, co
 			},
 			ResponseMIMEType: "application/json",
 			Temperature:      genai.Ptr[float32](0.3),
+			MaxOutputTokens:  16384,
 		},
 	)
 	if err != nil {
