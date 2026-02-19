@@ -50,6 +50,14 @@ ANSWER STYLE:
 - If the answer spans multiple topics, end with a brief "### まとめ" section.
 - Write in natural, readable Japanese — like an informative guide article, not a legal document translation.
 
+COMPREHENSIVENESS:
+- Use ALL provided contexts thoroughly. Do not skip or summarize away relevant information.
+- Aim for 5+ topic sections when the contexts contain enough material. Each section should have multiple bullet points with specific details.
+- Include supplementary notes (e.g., "補足：○○との違い") when the contexts mention related but distinct concepts that help the reader's understanding.
+- Add "※" notes for important caveats or exceptions within bullet points.
+- When a context mentions conditions, thresholds, or specific numbers, include them (e.g., "最低30秒の間隔", "4〜6つのゲート").
+- Err on the side of including more detail rather than less. A thorough answer is always better than a brief one.
+
 Output JSON only.
 ```
 
@@ -78,5 +86,7 @@ Requirements for answer_ja:
 - Technical terms: Japanese first, then English in parentheses — e.g., 「予選フェーズ（Qualification phase）」.
 - Explain the system/mechanism behind the rules, not just list rule text.
 - Do NOT include rule IDs or citation references in the answer text. Keep citations only in the citations array.
-- Cover all relevant aspects, exceptions, and edge cases found in the contexts.
+- Use ALL provided contexts thoroughly — extract every relevant detail, condition, number, and exception.
+- Aim for 5+ detailed sections. Include supplementary notes ("補足：") for related concepts.
+- A thorough, detailed answer is always better than a brief one. Do not omit relevant information.
 ```

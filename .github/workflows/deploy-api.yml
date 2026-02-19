@@ -74,7 +74,7 @@ jobs:
           RAG_CORPUS_ID=${{ secrets.RAG_CORPUS_ID }},\
           GEMINI_MODEL=gemini-2.5-flash,\
           MIN_CONFIDENCE_DEFAULT=0.1,\
-          TOP_K_DEFAULT=8,\
+          TOP_K_DEFAULT=15,\
           RATE_LIMIT_RPS=10,\
           RATE_LIMIT_BURST=20,\
           ALLOW_ORIGIN=*,\
