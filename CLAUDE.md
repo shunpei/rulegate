@@ -12,7 +12,7 @@ Design and requirements live in `docs/designdoc.md`. If anything is unclear or m
 All answers must be grounded **only** in retrieved rulebook contexts. If the contexts don’t contain the answer, respond that it cannot be found in the provided rule text.
 
 ## Output Contract
-- Primary endpoint: `POST /ask` (see `docs/designdoc.md` for JSON schema)
+- Primary endpoint: `POST /api/ask` (see `docs/designdoc.md` for JSON schema)
 - Response MUST be JSON.
 - For grounded answers, include at least **one** citation:
   - `rule_id`, `section_title`, `source_url`, `quote_en` (<= 25 words), and `score`.
@@ -76,4 +76,4 @@ Minimum required tests:
 ## Working Agreement
 - If you need to change behavior/spec, update `docs/designdoc.md` first, then implement.
 - Prefer small, reviewable commits.
-- Keep the `/ask` contract stable; introduce versioning if breaking changes are necessary.
+- Keep the `/api/ask` contract stable; introduce versioning if breaking changes are necessary.

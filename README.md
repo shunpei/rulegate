@@ -1,6 +1,6 @@
 # rulegate
 
-ICF カヌースラローム競技規則（英語PDF）に対する **日本語 Q&A API** です。
+ICF カヌースラローム競技規則（英語PDF）に対する **日本語 Q&A Webサービス** です。
 RAG（Retrieval Augmented Generation）を用いて、ルールブックの根拠に基づいた回答を返します。
 
 ## 特徴
@@ -14,33 +14,46 @@ RAG（Retrieval Augmented Generation）を用いて、ルールブックの根�
 
 | 要素 | 技術 |
 |---|---|
-| 言語 | Go 1.24+ |
-| ランタイム | Cloud Run |
+| バックエンド | Go 1.24+ / Echo v4 |
+| フロントエンド | Next.js 15 / TypeScript / Tailwind CSS v4 / shadcn/ui |
+| ランタイム | Cloud Run（API + Web の2サービス） |
 | 検索（Retrieval） | Vertex AI RAG Engine |
 | 生成（Generation） | Vertex AI Gemini (gemini-2.5-flash) |
 | PDF保管 | Cloud Storage |
 | ログ | Cloud Logging（slog 構造化ログ） |
-| コンテナ | Docker（distroless ベース） |
+| コンテナ | Docker（API: distroless / Web: node:22-alpine） |
+| CI/CD | GitHub Actions + Workload Identity Federation |
 
 ## プロジェクト構成
 
 ```
 .
-├── cmd/api/              # エントリーポイント（main.go）
+├── cmd/api/              # API エントリーポイント
 ├── internal/
-│   ├── domain/           # リクエスト/レスポンスDTO、エラー型
-│   ├── http/             # ハンドラー、ミドルウェア（レート制限・CORS）、サーバー
-│   ├── llm/              # Gemini クライアント（クエリ展開 + 回答生成）
+│   ├── domain/           # DTO、エラー型
+│   ├── http/             # Echo ハンドラー・ミドルウェア
+│   ├── llm/              # Gemini クライアント
 │   ├── logging/          # 構造化ログ
 │   └── rag/              # Vertex AI RAG Engine クライアント
+├── frontend/             # Next.js 15 フロントエンド
+│   ├── src/
+│   │   ├── app/          # App Router ページ
+│   │   ├── components/   # UI コンポーネント
+│   │   └── lib/          # API クライアント・型定義
+│   ├── Dockerfile        # 本番用
+│   └── Dockerfile.dev    # 開発用
 ├── docs/
 │   ├── designdoc.md      # 設計書
 │   └── prompts.md        # プロンプトテンプレート
 ├── scripts/
-│   ├── deploy.sh         # Cloud Run デプロイスクリプト
+│   ├── deploy-api.sh     # API Cloud Run デプロイ
+│   ├── deploy-web.sh     # Web Cloud Run デプロイ
 │   └── ingest_rag.sh     # RAG コーパス作成 + PDF取り込み
-├── Dockerfile
-├── CLAUDE.md             # Claude Code 向け指示書
+├── .github/workflows/    # CI/CD
+├── compose.yaml          # Docker Compose ローカル開発
+├── Dockerfile            # API 本番用
+├── Dockerfile.dev        # API 開発用（air ホットリロード）
+├── Makefile
 └── README.md
 ```
 
@@ -52,22 +65,65 @@ RAG（Retrieval Augmented Generation）を用いて、ルールブックの根�
 4. **回答生成** — 取得したコンテキストのみを使い、Gemini で日本語回答を生成
 5. **レスポンス** — 回答 + 根拠引用（citations）を JSON で返却
 
-## セットアップ
+## ローカル開発（Docker Compose）
+
+### 前提条件
+
+- Docker / Docker Compose
+- Google Cloud 認証済み（`gcloud auth application-default login`）
+
+### 起動
+
+```bash
+cp .env.example .env
+# .env を編集して GCP_PROJECT_ID, RAG_CORPUS_ID を設定
+
+make up
+```
+
+- フロントエンド: http://localhost:3000
+- API: http://localhost:8080
+- ヘルスチェック: http://localhost:8080/healthz
+
+### その他コマンド
+
+```bash
+make down     # 停止
+make logs     # ログ表示
+make test     # Go テスト実行
+```
+
+## ローカル開発（Docker なし）
 
 ### 前提条件
 
 - Go 1.24 以上
+- Node.js 22 以上
 - Google Cloud プロジェクト（Vertex AI API 有効化済み）
 - `gcloud` CLI（認証済み）
 
-### 環境変数の設定
+### API 起動
 
 ```bash
-cp .env.example .env
-# .env を編集して GCP プロジェクト ID や RAG コーパス ID を設定
+export $(cat .env | xargs)
+go run ./cmd/api
 ```
 
-主な環境変数:
+### フロントエンド起動
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### テスト
+
+```bash
+go test ./...
+```
+
+## 環境変数
 
 | 変数名 | 説明 | デフォルト |
 |---|---|---|
@@ -76,15 +132,16 @@ cp .env.example .env
 | `RAG_CORPUS_ID` | RAG コーパスのリソース名 | — |
 | `GEMINI_MODEL` | 回答生成モデル | `gemini-2.5-flash` |
 | `GEMINI_REWRITE_MODEL` | クエリ展開モデル | `gemini-2.5-flash` |
-| `MIN_CONFIDENCE_DEFAULT` | 最低信頼度スコア | `0.3` |
+| `MIN_CONFIDENCE_DEFAULT` | 最低信頼度スコア | `0.55` |
 | `TOP_K_DEFAULT` | 検索時の取得件数 | `8` |
 | `RATE_LIMIT_RPS` | レート制限（リクエスト/秒） | `10` |
 | `RATE_LIMIT_BURST` | レート制限バースト | `20` |
 | `ALLOW_ORIGIN` | CORS 許可オリジン | `*` |
-| `PORT` | リッスンポート | `8080` |
+| `PORT` | API リッスンポート | `8080` |
 | `SOURCE_URL` | ルールPDFの出典URL | `https://www.canoeicf.com/rules` |
+| `API_URL` | フロントエンド → API のURL（Web サービス用） | `http://localhost:8080` |
 
-### RAG コーパスのセットアップ
+## RAG コーパスのセットアップ
 
 1. ICF カヌースラロームルール PDF を Cloud Storage にアップロード:
    ```bash
@@ -100,25 +157,9 @@ cp .env.example .env
 
 3. 出力された `RAG_CORPUS_ID` を `.env` に設定
 
-### ローカル実行
-
-```bash
-# 環境変数を読み込み
-export $(cat .env | xargs)
-
-# 起動
-go run ./cmd/api
-```
-
-### テスト
-
-```bash
-go test ./...
-```
-
 ## API リファレンス
 
-### `POST /ask`
+### `POST /api/ask`
 
 日本語で質問し、ルールブックに基づいた回答を取得します。
 
@@ -131,7 +172,7 @@ go test ./...
   "rule_edition": "2025",
   "options": {
     "top_k": 8,
-    "min_confidence": 0.3
+    "min_confidence": 0.55
   }
 }
 ```
@@ -188,7 +229,7 @@ go test ./...
 |---|---|
 | `400` | 不正なリクエスト（`question_ja` が未指定など） |
 | `429` | レート制限超過 |
-| `500` | サーバーエラー（Vertex AI 障害等） |
+| `502` | Vertex AI 障害 |
 
 ### `GET /healthz`
 
@@ -200,10 +241,20 @@ go test ./...
 
 ## Cloud Run へのデプロイ
 
+### API デプロイ
+
 ```bash
 export GCP_PROJECT_ID=your-project
 export RAG_CORPUS_ID=projects/.../ragCorpora/...
-./scripts/deploy.sh
+./scripts/deploy-api.sh
+```
+
+### Web デプロイ
+
+```bash
+export GCP_PROJECT_ID=your-project
+export API_URL=https://rulegate-api-xxxxx.run.app
+./scripts/deploy-web.sh
 ```
 
 ## ライセンス

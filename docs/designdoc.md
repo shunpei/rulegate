@@ -254,32 +254,67 @@ Return JSON:
 
 ---
 
-## 9. リポジトリ構成（提案）
+## 9. リポジトリ構成
 
 ```
 .
-├── cmd/api/                 # Cloud Run entrypoint
+├── cmd/api/                 # Cloud Run API entrypoint
 ├── internal/
-│   ├── http/
-│   ├── rag/
-│   ├── llm/
-│   ├── domain/
-│   └── logging/
+│   ├── http/                # Echo v4 ルーティング、ミドルウェア
+│   ├── rag/                 # Vertex AI RAG Engine クライアント
+│   ├── llm/                 # Gemini クライアント（rewrite + answer）
+│   ├── domain/              # DTO、エラー型
+│   └── logging/             # 構造化ログ
+├── frontend/                # Next.js 15 フロントエンド
+│   ├── src/
+│   │   ├── app/             # App Router ページ
+│   │   ├── components/      # UI コンポーネント（shadcn/ui）
+│   │   └── lib/             # API クライアント、型定義
+│   ├── Dockerfile           # 本番用（standalone ビルド）
+│   └── Dockerfile.dev       # 開発用
 ├── docs/
 │   ├── designdoc.md
-│   ├── api.md
-│   ├── prompts.md
-│   └── operations.md
+│   └── prompts.md
 ├── scripts/
-│   ├── ingest_rag.sh        # corpus取り込み（必要なら）
-│   └── deploy.sh
-├── infra/                   # terraform (optional)
+│   ├── deploy-api.sh        # API Cloud Run デプロイ
+│   ├── deploy-web.sh        # Web Cloud Run デプロイ
+│   └── ingest_rag.sh        # RAG コーパス取り込み
+├── .github/workflows/       # CI/CD（test, deploy-api, deploy-web）
+├── compose.yaml             # Docker Compose ローカル開発
+├── Dockerfile               # API 本番用（distroless）
+├── Dockerfile.dev           # API 開発用（air ホットリロード）
+├── Makefile
 └── README.md
 ```
 
 ---
 
-## 10. 実装タスク（Claude Code にやってほしいこと）
+## 10. フロントエンド・デプロイ構成
+
+### 10.1 フロントエンド
+
+- **技術スタック**: Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 + shadcn/ui
+- **API プロキシ**: `next.config.ts` の rewrites で `/api/:path*` をバックエンドに転送
+  - ローカル: `http://api:8080`（Docker Compose ネットワーク）
+  - 本番: 環境変数 `API_URL` で Cloud Run 内部 URL を指定
+
+### 10.2 Cloud Run デプロイ（2サービス）
+
+| サービス | イメージ | ポート | メモリ |
+|---------|---------|-------|-------|
+| `rulegate-api` | Go (distroless) | 8080 | 512Mi |
+| `rulegate-web` | Next.js (node:22-alpine) | 3000 | 256Mi |
+
+### 10.3 CI/CD
+
+- GitHub Actions + Workload Identity Federation
+- `deploy-api.yml`: `cmd/`, `internal/`, `go.mod` 変更時に API デプロイ
+- `deploy-web.yml`: `frontend/` 変更時に Web デプロイ
+- `test.yml`: PR 時に `go test ./...` 実行
+
+---
+
+## 11. 実装タスク（Claude Code にやってほしいこと）
 
 ### Phase 1: API最小実装
 
@@ -301,14 +336,14 @@ Return JSON:
 
 ### Phase 3: 品質向上（余裕があれば）
 
-* [ ] 攻撃的プロンプト/注入対策（“ignore previous” などのフィルタ）
+* [ ] 攻撃的プロンプト/注入対策（”ignore previous” などのフィルタ）
 * [ ] 取得コンテキストの重複排除/多様化
 * [ ] 回答の「条件分岐テンプレ」（例外・条件の列挙）
 * [ ] 回答の信頼度推定（スコア＋文脈数＋一貫性）
 
 ---
 
-## 11. 受け入れ基準（Acceptance Criteria）
+## 12. 受け入れ基準（Acceptance Criteria）
 
 * 日本語質問 → 日本語回答が返る
 * すべての回答に **少なくとも1つ** citation が付く（根拠ありの場合）
@@ -319,7 +354,7 @@ Return JSON:
 
 ---
 
-## 12. 補足（実装時の注意）
+## 13. 補足（実装時の注意）
 
 * RAG Engine / Gemini のAPI仕様は更新されることがあるため、実装時点の公式ドキュメントに合わせること。
 * 特に RAG の retrieve 出力（context/score/source）の扱いは “output explained” を参照して正規化すること。
@@ -327,7 +362,7 @@ Return JSON:
 
 ---
 
-## 13. Claude Codeへの作業指示（短文）
+## 14. Claude Codeへの作業指示（短文）
 
 * この設計書に従って Go で Cloud Run API を実装すること
 * `/ask` の入出力は本設計のJSON schemaに合わせること

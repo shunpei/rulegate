@@ -1,0 +1,66 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - "Dockerfile"
+      - "docs/prompts.md"
+
+env:
+  GCP_PROJECT_ID: rulegate
+  GCP_REGION: europe-west4
+  SERVICE_NAME: rulegate-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push
+        run: |
+          gcloud builds submit \
+            --tag "gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}" \
+            --project "${{ env.GCP_PROJECT_ID }}"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image "gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}" \
+            --region "${{ env.GCP_REGION }}" \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "\
+          GCP_PROJECT_ID=${{ env.GCP_PROJECT_ID }},\
+          GCP_REGION=${{ env.GCP_REGION }},\
+          RAG_CORPUS_ID=${{ secrets.RAG_CORPUS_ID }},\
+          GEMINI_MODEL=gemini-2.5-flash,\
+          MIN_CONFIDENCE_DEFAULT=0.55,\
+          TOP_K_DEFAULT=8,\
+          RATE_LIMIT_RPS=10,\
+          RATE_LIMIT_BURST=20,\
+          ALLOW_ORIGIN=*,\
+          SOURCE_URL=https://www.canoeicf.com/rules,\
+          PROMPTS_PATH=/docs/prompts.md" \
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 60 \
+            --max-instances 3

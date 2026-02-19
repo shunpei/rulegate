@@ -1,0 +1,52 @@
+name: Deploy Web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+
+env:
+  GCP_PROJECT_ID: rulegate
+  GCP_REGION: europe-west4
+  SERVICE_NAME: rulegate-web
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push
+        run: |
+          gcloud builds submit \
+            --tag "gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}" \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            ./frontend
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image "gcr.io/${{ env.GCP_PROJECT_ID }}/${{ env.SERVICE_NAME }}" \
+            --region "${{ env.GCP_REGION }}" \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "API_URL=${{ secrets.API_URL }}" \
+            --memory 256Mi \
+            --cpu 1 \
+            --timeout 30 \
+            --max-instances 3 \
+            --port 3000
